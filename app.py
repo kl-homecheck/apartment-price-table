@@ -26,6 +26,7 @@ from renderer import build_price_table
 st.set_page_config(page_title="아파트 사전점검 단가표 자동 생성기", page_icon="🏢", layout="centered")
 
 st.title("🏢 아파트 사전점검 단가표 자동 생성기")
+st.caption("앱 버전: v3 (2026-11-04)")
 st.write("구글 시트에서 행(들)을 복사한 뒤 아래에 그대로 붙여넣고 버튼을 누르면, 완성된 단가표 이미지를 만들어드려요.")
 
 sheet_text = st.text_area(
@@ -66,6 +67,8 @@ result = st.session_state.get("result")
 if result:
     st.success(f"'{result['name']}' 단가표가 완성되었어요! (총 {result['count']}개 타입)")
 
+    st.caption(f"진단: 이미지 크기 {len(result['png']):,} bytes")
+
     # 이미지를 페이지 안에 직접 심기 (임시 파일 주소를 쓰지 않아서 깨지지 않음)
     b64 = base64.b64encode(result["png"]).decode("ascii")
     st.markdown(
@@ -73,8 +76,18 @@ if result:
         unsafe_allow_html=True,
     )
 
+    # 다운로드 링크도 페이지 안에 직접 심기 (서버 임시 파일을 거치지 않음)
+    safe_name = f"{result['name']}_단가표.png".replace('"', "")
+    st.markdown(
+        f'<a href="data:image/png;base64,{b64}" download="{safe_name}" '
+        'style="display:block;text-align:center;padding:0.6rem 1rem;margin:0.5rem 0;'
+        'border-radius:0.5rem;background:#0064FF;color:#fff;font-weight:600;'
+        'text-decoration:none;">⬇️ 이미지 다운로드</a>',
+        unsafe_allow_html=True,
+    )
+
     st.download_button(
-        label="⬇️ 이미지 다운로드",
+        label="⬇️ 이미지 다운로드 (예비)",
         data=result["png"],
         file_name=f"{result['name']}_단가표.png",
         mime="image/png",
