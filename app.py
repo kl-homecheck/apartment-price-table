@@ -26,8 +26,8 @@ from renderer import build_price_table
 st.set_page_config(page_title="아파트 사전점검 단가표 자동 생성기", page_icon="🏢", layout="centered")
 
 st.title("🏢 아파트 사전점검 단가표 자동 생성기")
-st.caption("앱 버전: v3 (2026-11-04)")
-st.write("구글 시트에서 행(들)을 복사한 뒤 아래에 그대로 붙여넣고 버튼을 누르면, 완성된 단가표 이미지를 만들어드려요.")
+st.caption("앱 버전: v5 (2026-11-12)")
+st.write("구글 시트에서 행(들)을 복사한 뒤 아래에 그대로 붙여넣고 버튼을 누르면, 기본 ver과 이벤트 종료 ver 단가표 이미지를 한 번에 만들어드려요.")
 
 sheet_text = st.text_area(
     "구글 시트 데이터를 복사해서 붙여넣으세요",
@@ -37,6 +37,11 @@ sheet_text = st.text_area(
 
 generate_clicked = st.button("이미지 생성하기", type="primary", use_container_width=True)
 
+VERSIONS = [
+    ("기본 ver", False, ""),                          # 선착순 할인 적용 표기
+    ("이벤트 종료 ver", True, "_이벤트종료"),         # 할인 표기 제거 + 가격 재계산
+]
+
 if generate_clicked:
     if not sheet_text.strip():
         st.session_state.pop("result", None)
@@ -45,14 +50,15 @@ if generate_clicked:
         try:
             with st.spinner("이미지를 만들고 있어요..."):
                 rows = parse_sheet_text(sheet_text)
-                image = build_price_table(rows)
-                buf = io.BytesIO()
-                image.save(buf, format="PNG")
-                png_bytes = buf.getvalue()
+                images = {}
+                for label, ended, _suffix in VERSIONS:
+                    buf = io.BytesIO()
+                    build_price_table(rows, event_ended=ended).save(buf, format="PNG")
+                    images[label] = buf.getvalue()
 
-            # 다운로드 버튼을 눌러 화면이 다시 그려져도 결과가 사라지지 않게 보관
+            # 버전을 바꿔 보거나 다운로드를 눌러 화면이 다시 그려져도 결과가 사라지지 않게 보관
             st.session_state["result"] = {
-                "png": png_bytes,
+                "images": images,
                 "name": rows[0]["complex_name"],
                 "count": len(rows),
             }
@@ -65,34 +71,38 @@ if generate_clicked:
 
 result = st.session_state.get("result")
 if result:
-    st.success(f"'{result['name']}' 단가표가 완성되었어요! (총 {result['count']}개 타입)")
+    st.success(f"'{result['name']}' 단가표가 완성되었어요! (총 {result['count']}개 타입) 아래에서 버전을 골라 받으세요.")
 
-    st.caption(f"진단: 이미지 크기 {len(result['png']):,} bytes")
+    tabs = st.tabs([label for label, _e, _s in VERSIONS])
+    for tab, (label, _ended, suffix) in zip(tabs, VERSIONS):
+        with tab:
+            png = result["images"][label]
+            b64 = base64.b64encode(png).decode("ascii")
+            file_name = f"{result['name']}_단가표{suffix}.png".replace('"', "")
 
-    # 이미지를 페이지 안에 직접 심기 (임시 파일 주소를 쓰지 않아서 깨지지 않음)
-    b64 = base64.b64encode(result["png"]).decode("ascii")
-    st.markdown(
-        f'<img src="data:image/png;base64,{b64}" style="width:100%;height:auto;" alt="단가표">',
-        unsafe_allow_html=True,
-    )
+            # 이미지를 페이지 안에 직접 심기 (임시 파일 주소를 쓰지 않아서 깨지지 않음)
+            st.markdown(
+                f'<img src="data:image/png;base64,{b64}" style="width:100%;height:auto;" alt="{label}">',
+                unsafe_allow_html=True,
+            )
 
-    # 다운로드 링크도 페이지 안에 직접 심기 (서버 임시 파일을 거치지 않음)
-    safe_name = f"{result['name']}_단가표.png".replace('"', "")
-    st.markdown(
-        f'<a href="data:image/png;base64,{b64}" download="{safe_name}" '
-        'style="display:block;text-align:center;padding:0.6rem 1rem;margin:0.5rem 0;'
-        'border-radius:0.5rem;background:#0064FF;color:#fff;font-weight:600;'
-        'text-decoration:none;">⬇️ 이미지 다운로드</a>',
-        unsafe_allow_html=True,
-    )
+            # 다운로드 링크도 페이지 안에 직접 심기 (서버 임시 파일을 거치지 않음)
+            st.markdown(
+                f'<a href="data:image/png;base64,{b64}" download="{file_name}" '
+                'style="display:block;text-align:center;padding:0.6rem 1rem;margin:0.5rem 0;'
+                'border-radius:0.5rem;background:#0064FF;color:#fff;font-weight:600;'
+                f'text-decoration:none;">⬇️ {label} 이미지 다운로드</a>',
+                unsafe_allow_html=True,
+            )
 
-    st.download_button(
-        label="⬇️ 이미지 다운로드 (예비)",
-        data=result["png"],
-        file_name=f"{result['name']}_단가표.png",
-        mime="image/png",
-        use_container_width=True,
-    )
+            st.download_button(
+                label=f"⬇️ {label} 다운로드 (예비)",
+                data=png,
+                file_name=file_name,
+                mime="image/png",
+                use_container_width=True,
+                key=f"dl_{label}",
+            )
 
 with st.expander("붙여넣기 형식이 궁금하다면 (예시 보기)"):
     st.code(
