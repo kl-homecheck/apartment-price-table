@@ -285,7 +285,7 @@ def build_price_table(rows: list, event_ended: bool = False) -> Image.Image:
     complex_name = rows[0]["complex_name"]
 
     header = render_header(complex_name)
-    footer = Image.open(C.TEMPLATE_5).convert("RGBA")
+    footer = Image.open(C.TEMPLATE_5_ENDED if event_ended else C.TEMPLATE_5).convert("RGBA")
     section2_header = Image.open(C.TEMPLATE_3).convert("RGBA")
 
     row1_imgs = [render_row1(r, event_ended) for r in rows]
