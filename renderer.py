@@ -113,8 +113,13 @@ def _money(n: int) -> str:
     return f"{n:,}"
 
 
-def render_row1(row: dict) -> Image.Image:
-    """2번.png 위에 '프리미엄' 한 줄 데이터를 합성."""
+def render_row1(row: dict, event_ended: bool = False) -> Image.Image:
+    """2번.png 위에 '프리미엄' 한 줄 데이터를 합성.
+
+    event_ended=True (이벤트 종료 ver):
+      - 접수대행 칸: '50,000' 취소선 + '선착순 할인 적용' 제거 → '50,000' 일반 글씨 한 줄
+      - 사전점검 칸: 취소선 제거 → 더한 금액(타임특가 + 5만원)을 주황 큰 글씨로만 표시
+    """
     img = Image.open(C.TEMPLATE_2).convert("RGBA")
     draw = ImageDraw.Draw(img)
     xs = C.ROW1_COL_X
@@ -130,6 +135,16 @@ def render_row1(row: dict) -> Image.Image:
 
     # 2) 정가 (※ '정가' 칸에는 G열이 아니라 타임특가/사전점검 할인가와 동일한 값이 들어감)
     _draw_center_tracked(draw, (xs[1], y), _money(row["time_deal"]), _font(C.ROW1_PRICE_FONT, C.ROW1_PRICE_FONT_SIZE), C.ROW1_PRICE_COLOR)
+
+    if event_ended:
+        # 3) 접수대행: 할인 표기 없이 '50,000' 일반 글씨 (사전점검 가격 칸과 같은 스타일)
+        _draw_center_tracked(draw, (xs[2], y), C.FIXED_RECEIPT_TOP,
+                             _font(C.ROW1_PRICE_FONT, C.ROW1_PRICE_FONT_SIZE), C.ROW1_PRICE_COLOR)
+        # 4) 사전점검: 더한 금액(타임특가 + 5만원)을 주황 큰 글씨로 한 줄만
+        _draw_center_tracked(draw, (xs[3], y), _money(row["receipt_strike"]),
+                             _font(C.ROW1_DISCOUNT_FONT, C.ROW1_DISCOUNT_FONT_SIZE), C.ROW1_DISCOUNT_COLOR,
+                             tracking=C.ROW1_DISCOUNT_LETTER_SPACING)
+        return img
 
     # 3) 접수대행 (고정) - '50,000'(취소선) + '선착순 할인 적용'(작고 빨강)
     draw_vertical_pair(draw, xs[2], y, C.ROW1_FIXED_GAP, [
@@ -152,8 +167,13 @@ def render_row1(row: dict) -> Image.Image:
     return img
 
 
-def render_row2(row: dict) -> Image.Image:
-    """4번.png 위에 '실속결합' 한 줄 데이터를 합성."""
+def render_row2(row: dict, event_ended: bool = False) -> Image.Image:
+    """4번.png 위에 '실속결합' 한 줄 데이터를 합성.
+
+    event_ended=True (이벤트 종료 ver):
+      - 사전·사후 접수대행 칸: 취소선/'선착순 할인 적용' 제거 → '50,000' 일반 글씨 한 줄
+      - 프로모션 칸: 위 취소선 합산 금액은 그대로, 아래 최종가는 합산 금액 - 5만원
+    """
     img = Image.open(C.TEMPLATE_4).convert("RGBA")
     draw = ImageDraw.Draw(img)
     xs = C.ROW2_COL_X
@@ -174,14 +194,28 @@ def render_row2(row: dict) -> Image.Image:
         tracking=C.ROW2_PRICE_LETTER_SPACING,
     )
 
+    def _receipt_cell(cx, combo_discount=False):
+        """접수대행 칸 (기본: 50,000 취소선 + 선착순 할인 적용 / 이벤트 종료: 50,000 일반 글씨)
+        combo_discount=True 이고 이벤트 종료 ver 이면: 50,000 취소선 + '결합 할인 적용'
+        """
+        if event_ended and not combo_discount:
+            _draw_center_tracked(
+                draw, (cx, y), C.FIXED_RECEIPT_TOP,
+                _font(C.ROW2_PRICE_FONT, C.ROW2_PRICE_FONT_SIZE), C.ROW2_PRICE_COLOR,
+                tracking=C.ROW2_PRICE_LETTER_SPACING,
+            )
+            return
+        draw_vertical_pair(draw, cx, y, C.ROW2_FIXED_GAP, [
+            {"text": C.FIXED_RECEIPT_TOP, "font": _font(C.ROW2_FIXED_TOP_FONT, C.ROW2_FIXED_TOP_FONT_SIZE),
+             "fill": C.COLOR_GRAY60, "tracking": C.ROW2_FIXED_TOP_LETTER_SPACING,
+             "strike": True, "line_width": C.ROW2_FIXED_TOP_STRIKE_WIDTH},
+            {"text": C.FIXED_COMBO_BOTTOM if (combo_discount and event_ended) else C.FIXED_RECEIPT_BOTTOM,
+             "font": _font(C.ROW2_FIXED_BOTTOM_FONT, C.ROW2_FIXED_BOTTOM_FONT_SIZE),
+             "fill": C.COLOR_RED, "tracking": C.ROW2_FIXED_BOTTOM_LETTER_SPACING},
+        ])
+
     # 3) 사전점검 접수대행 (고정)
-    draw_vertical_pair(draw, xs[2], y, C.ROW2_FIXED_GAP, [
-        {"text": C.FIXED_RECEIPT_TOP, "font": _font(C.ROW2_FIXED_TOP_FONT, C.ROW2_FIXED_TOP_FONT_SIZE),
-         "fill": C.COLOR_GRAY60, "tracking": C.ROW2_FIXED_TOP_LETTER_SPACING,
-         "strike": True, "line_width": C.ROW2_FIXED_TOP_STRIKE_WIDTH},
-        {"text": C.FIXED_RECEIPT_BOTTOM, "font": _font(C.ROW2_FIXED_BOTTOM_FONT, C.ROW2_FIXED_BOTTOM_FONT_SIZE),
-         "fill": C.COLOR_RED, "tracking": C.ROW2_FIXED_BOTTOM_LETTER_SPACING},
-    ])
+    _receipt_cell(xs[2])
 
     # 4) 사후점검 (고정 금액)
     _draw_center_tracked(
@@ -190,21 +224,17 @@ def render_row2(row: dict) -> Image.Image:
         tracking=C.ROW2_PRICE_LETTER_SPACING,
     )
 
-    # 5) 사후점검 접수대행 (고정)
-    draw_vertical_pair(draw, xs[4], y, C.ROW2_FIXED_GAP, [
-        {"text": C.FIXED_RECEIPT_TOP, "font": _font(C.ROW2_FIXED_TOP_FONT, C.ROW2_FIXED_TOP_FONT_SIZE),
-         "fill": C.COLOR_GRAY60, "tracking": C.ROW2_FIXED_TOP_LETTER_SPACING,
-         "strike": True, "line_width": C.ROW2_FIXED_TOP_STRIKE_WIDTH},
-        {"text": C.FIXED_RECEIPT_BOTTOM, "font": _font(C.ROW2_FIXED_BOTTOM_FONT, C.ROW2_FIXED_BOTTOM_FONT_SIZE),
-         "fill": C.COLOR_RED, "tracking": C.ROW2_FIXED_BOTTOM_LETTER_SPACING},
-    ])
+    # 5) 사후점검 접수대행 (고정) - 이벤트 종료 ver 에서는 '50,000'(취소선) + '결합 할인 적용'
+    _receipt_cell(xs[4], combo_discount=True)
 
     # 6) 프로모션 = 취소선(전체총합, J열) + 최종가(굵고 큰 파랑, M열)
+    #    이벤트 종료 ver: 최종가 = 전체총합 - 5만원 (위 합산 금액은 그대로)
+    promo_price = (row["total_before"] - C.RECEIPT_FEE) if event_ended else row["promo_final"]
     draw_vertical_pair(draw, xs[5], y, C.ROW2_PROMO_GAP, [
         {"text": _money(row["total_before"]), "font": _font(C.ROW2_STRIKE_FONT, C.ROW2_STRIKE_FONT_SIZE),
          "fill": C.ROW2_STRIKE_COLOR, "tracking": C.ROW2_STRIKE_LETTER_SPACING,
          "strike": True, "line_width": C.ROW2_STRIKE_WIDTH},
-        {"text": _money(row["promo_final"]), "font": _font(C.ROW2_PROMO_FONT, C.ROW2_PROMO_FONT_SIZE),
+        {"text": _money(promo_price), "font": _font(C.ROW2_PROMO_FONT, C.ROW2_PROMO_FONT_SIZE),
          "fill": C.ROW2_PROMO_COLOR, "tracking": C.ROW2_PROMO_LETTER_SPACING},
     ])
 
@@ -243,8 +273,12 @@ def render_header(complex_name: str) -> Image.Image:
     return img
 
 
-def build_price_table(rows: list) -> Image.Image:
-    """전체 단가표 이미지를 조립해서 반환."""
+def build_price_table(rows: list, event_ended: bool = False) -> Image.Image:
+    """전체 단가표 이미지를 조립해서 반환.
+
+    event_ended=False : 기본 ver (선착순 할인 적용 표기)
+    event_ended=True  : 이벤트 종료 ver (50,000 취소선/선착순 할인 적용 제거, 가격 재계산)
+    """
     if not rows:
         raise ValueError("rows가 비어 있습니다.")
 
@@ -254,8 +288,8 @@ def build_price_table(rows: list) -> Image.Image:
     footer = Image.open(C.TEMPLATE_5).convert("RGBA")
     section2_header = Image.open(C.TEMPLATE_3).convert("RGBA")
 
-    row1_imgs = [render_row1(r) for r in rows]
-    row2_imgs = [render_row2(r) for r in rows]
+    row1_imgs = [render_row1(r, event_ended) for r in rows]
+    row2_imgs = [render_row2(r, event_ended) for r in rows]
 
     width = header.width
     total_height = (
