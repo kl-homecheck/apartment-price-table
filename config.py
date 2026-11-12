@@ -24,6 +24,7 @@ TEMPLATE_2 = os.path.join(ASSETS_DIR, "2번.png")  # 프리미엄 반복 행
 TEMPLATE_3 = os.path.join(ASSETS_DIR, "3번.png")  # 실속결합 표 헤더
 TEMPLATE_4 = os.path.join(ASSETS_DIR, "4번.png")  # 실속결합 반복 행
 TEMPLATE_5 = os.path.join(ASSETS_DIR, "5번.png")  # 푸터 (주의사항 + 부가서비스)
+TEMPLATE_5_ENDED = os.path.join(ASSETS_DIR, "5번_이벤트종료.png")  # 이벤트 종료 ver 푸터 ('선착순 할인 제공' 삭제)
 
 # ------------------------------------------------------------------
 # 폰트: Pretendard (외부 OTF). assets/fonts/ 에 없으면 시스템 기본
